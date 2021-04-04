@@ -16,11 +16,9 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
 import android.os.Build;
-import android.os.Trace;
 import android.util.Log;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -29,23 +27,15 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Vector;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.examples.detection.MainActivity;
 import org.tensorflow.lite.examples.detection.env.Logger;
 import org.tensorflow.lite.examples.detection.env.Utils;
 
-import static org.tensorflow.lite.examples.detection.env.Utils.expit;
-import static org.tensorflow.lite.examples.detection.env.Utils.softmax;
-
-import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.GpuDelegate;
 import org.tensorflow.lite.nnapi.NnApiDelegate;
 
@@ -72,10 +62,13 @@ public class YoloV4Classifier implements Classifier {
             final AssetManager assetManager,
             final String modelFilename,
             final String labelFilename,
-            final boolean isQuantized)
+            final boolean isQuantized,
+            final int inputSize,
+            final int outputSize)
             throws IOException {
         final YoloV4Classifier d = new YoloV4Classifier();
-
+        d.inputSize = inputSize;
+        d.outputSize = outputSize;
         String actualFilename = labelFilename.split("file:///android_asset/")[1];
         InputStream labelsInput = assetManager.open(actualFilename);
         BufferedReader br = new BufferedReader(new InputStreamReader(labelsInput));
@@ -119,9 +112,9 @@ public class YoloV4Classifier implements Classifier {
         } else {
             numBytesPerChannel = 4; // Floating point
         }
-        d.imgData = ByteBuffer.allocateDirect(1 * d.INPUT_SIZE * d.INPUT_SIZE * 3 * numBytesPerChannel);
+        d.imgData = ByteBuffer.allocateDirect(1 * d.inputSize * d.inputSize * 3 * numBytesPerChannel);
         d.imgData.order(ByteOrder.nativeOrder());
-        d.intValues = new int[d.INPUT_SIZE * d.INPUT_SIZE];
+        d.intValues = new int[d.inputSize * d.inputSize];
 
         return d;
     }
@@ -161,8 +154,8 @@ public class YoloV4Classifier implements Classifier {
     private static final float IMAGE_STD = 255.0f;
 
     //config yolov4
-    private static final int INPUT_SIZE = 416;
-    private static final int[] OUTPUT_WIDTH = new int[]{52, 26, 13};
+    private int inputSize = 416;
+    private int outputSize = 540;
 
     private static final int[][] MASKS = new int[][]{{0, 1, 2}, {3, 4, 5}, {6, 7, 8}};
     private static final int[] ANCHORS = new int[]{
@@ -178,10 +171,9 @@ public class YoloV4Classifier implements Classifier {
     private static boolean isGPU = true;
 
     // tiny or not
-    private static boolean isTiny = false;
+    private static boolean isTiny = true;
 
     // config yolov4 tiny
-    private static final int[] OUTPUT_WIDTH_TINY = new int[]{2535, 2535};
     private static final int[] OUTPUT_WIDTH_FULL = new int[]{10647, 10647};
     private static final int[][] MASKS_TINY = new int[][]{{3, 4, 5}, {1, 2, 3}};
     private static final int[] ANCHORS_TINY = new int[]{
@@ -286,13 +278,13 @@ public class YoloV4Classifier implements Classifier {
      * Writes Image data into a {@code ByteBuffer}.
      */
     protected ByteBuffer convertBitmapToByteBuffer(Bitmap bitmap) {
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4 * BATCH_SIZE * INPUT_SIZE * INPUT_SIZE * PIXEL_SIZE);
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4 * BATCH_SIZE * inputSize * inputSize * PIXEL_SIZE);
         byteBuffer.order(ByteOrder.nativeOrder());
-        int[] intValues = new int[INPUT_SIZE * INPUT_SIZE];
+        int[] intValues = new int[inputSize * inputSize];
         bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
         int pixel = 0;
-        for (int i = 0; i < INPUT_SIZE; ++i) {
-            for (int j = 0; j < INPUT_SIZE; ++j) {
+        for (int i = 0; i < inputSize; ++i) {
+            for (int j = 0; j < inputSize; ++j) {
                 final int val = intValues[pixel++];
                 byteBuffer.putFloat(((val >> 16) & 0xFF) / 255.0f);
                 byteBuffer.putFloat(((val >> 8) & 0xFF) / 255.0f);
@@ -376,8 +368,9 @@ public class YoloV4Classifier implements Classifier {
      * For yolov4-tiny, the situation would be a little different from the yolov4, it only has two
      * output. Both has three dimenstion. The first one is a tensor with dimension [1, 2535,4], containing all the bounding boxes.
      * The second one is a tensor with dimension [1, 2535, class_num], containing all the classes score.
+     *
      * @param byteBuffer input ByteBuffer, which contains the image information
-     * @param bitmap pixel disenty used to resize the output images
+     * @param bitmap     pixel disenty used to resize the output images
      * @return an array list containing the recognitions
      */
 
@@ -390,24 +383,24 @@ public class YoloV4Classifier implements Classifier {
         tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
 
         int gridWidth = OUTPUT_WIDTH_FULL[0];
-        float[][][] bboxes = (float [][][]) outputMap.get(0);
+        float[][][] bboxes = (float[][][]) outputMap.get(0);
         float[][][] out_score = (float[][][]) outputMap.get(1);
 
-        for (int i = 0; i < gridWidth;i++){
+        for (int i = 0; i < gridWidth; i++) {
             float maxClass = 0;
             int detectedClass = -1;
             final float[] classes = new float[labels.size()];
-            for (int c = 0;c< labels.size();c++){
-                classes [c] = out_score[0][i][c];
+            for (int c = 0; c < labels.size(); c++) {
+                classes[c] = out_score[0][i][c];
             }
-            for (int c = 0;c<labels.size();++c){
-                if (classes[c] > maxClass){
+            for (int c = 0; c < labels.size(); ++c) {
+                if (classes[c] > maxClass) {
                     detectedClass = c;
                     maxClass = classes[c];
                 }
             }
             final float score = maxClass;
-            if (score > getObjThresh()){
+            if (score > getObjThresh()) {
                 final float xPos = bboxes[0][i][0];
                 final float yPos = bboxes[0][i][1];
                 final float w = bboxes[0][i][2];
@@ -417,7 +410,7 @@ public class YoloV4Classifier implements Classifier {
                         Math.max(0, yPos - h / 2),
                         Math.min(bitmap.getWidth() - 1, xPos + w / 2),
                         Math.min(bitmap.getHeight() - 1, yPos + h / 2));
-                detections.add(new Recognition("" + i, labels.get(detectedClass),score,rectF,detectedClass ));
+                detections.add(new Recognition("" + i, labels.get(detectedClass), score, rectF, detectedClass));
             }
         }
         return detections;
@@ -426,30 +419,30 @@ public class YoloV4Classifier implements Classifier {
     private ArrayList<Recognition> getDetectionsForTiny(ByteBuffer byteBuffer, Bitmap bitmap) {
         ArrayList<Recognition> detections = new ArrayList<Recognition>();
         Map<Integer, Object> outputMap = new HashMap<>();
-        outputMap.put(0, new float[1][OUTPUT_WIDTH_TINY[0]][4]);
-        outputMap.put(1, new float[1][OUTPUT_WIDTH_TINY[1]][labels.size()]);
+        outputMap.put(0, new float[1][outputSize][4]);
+        outputMap.put(1, new float[1][outputSize][labels.size()]);
         Object[] inputArray = {byteBuffer};
         tfLite.runForMultipleInputsOutputs(inputArray, outputMap);
 
-        int gridWidth = OUTPUT_WIDTH_TINY[0];
-        float[][][] bboxes = (float [][][]) outputMap.get(0);
+        int gridWidth = outputSize;
+        float[][][] bboxes = (float[][][]) outputMap.get(0);
         float[][][] out_score = (float[][][]) outputMap.get(1);
 
-        for (int i = 0; i < gridWidth;i++){
+        for (int i = 0; i < gridWidth; i++) {
             float maxClass = 0;
             int detectedClass = -1;
             final float[] classes = new float[labels.size()];
-            for (int c = 0;c< labels.size();c++){
-                classes [c] = out_score[0][i][c];
+            for (int c = 0; c < labels.size(); c++) {
+                classes[c] = out_score[0][i][c];
             }
-            for (int c = 0;c<labels.size();++c){
-                if (classes[c] > maxClass){
+            for (int c = 0; c < labels.size(); ++c) {
+                if (classes[c] > maxClass) {
                     detectedClass = c;
                     maxClass = classes[c];
                 }
             }
             final float score = maxClass;
-            if (score > getObjThresh()){
+            if (score > getObjThresh()) {
                 final float xPos = bboxes[0][i][0];
                 final float yPos = bboxes[0][i][1];
                 final float w = bboxes[0][i][2];
@@ -459,7 +452,7 @@ public class YoloV4Classifier implements Classifier {
                         Math.max(0, yPos - h / 2),
                         Math.min(bitmap.getWidth() - 1, xPos + w / 2),
                         Math.min(bitmap.getHeight() - 1, yPos + h / 2));
-                detections.add(new Recognition("" + i, labels.get(detectedClass),score,rectF,detectedClass ));
+                detections.add(new Recognition("" + i, labels.get(detectedClass), score, rectF, detectedClass));
             }
         }
         return detections;

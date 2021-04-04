@@ -32,7 +32,7 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final float MINIMUM_CONFIDENCE_TF_OD_API = 0.5f;
+    public static final float MINIMUM_CONFIDENCE_TF_OD_API = 0.03f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,16 +70,19 @@ public class MainActivity extends AppCompatActivity {
 
     private static final Logger LOGGER = new Logger();
 
-    public static final int TF_OD_API_INPUT_SIZE = 416;
+    public static final int TF_OD_API_INPUT_SIZE = 192;
 
-    private static final boolean TF_OD_API_IS_QUANTIZED = false;
+    private static final boolean TF_OD_API_IS_QUANTIZED = true;
 
-    private static final String TF_OD_API_MODEL_FILE = "yolov4-416-fp32.tflite";
+    private static final String TF_OD_API_MODEL_FILE = "yolov4-tiny_192_74maP_quantized.tflite";
 
     private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/coco.txt";
+    private static final String TF_OD_API_OCR_MODEL_FILE = "yolov4-tiny_ocr_256_100maP_quantized.tflite";
+
+    private static final String TF_OD_API_OCR_LABELS_FILE = "file:///android_asset/ocr.txt";
 
     // Minimum detection confidence to track a detection.
-    private static final boolean MAINTAIN_ASPECT = false;
+    private static final boolean MAINTAIN_ASPECT = true;
     private Integer sensorOrientation = 90;
 
     private Classifier detector;
@@ -123,7 +126,8 @@ public class MainActivity extends AppCompatActivity {
                             getAssets(),
                             TF_OD_API_MODEL_FILE,
                             TF_OD_API_LABELS_FILE,
-                            TF_OD_API_IS_QUANTIZED);
+                            TF_OD_API_IS_QUANTIZED,
+                            192, 540);
         } catch (final IOException e) {
             e.printStackTrace();
             LOGGER.e(e, "Exception initializing classifier!");

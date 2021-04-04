@@ -52,15 +52,19 @@ import org.tensorflow.lite.examples.detection.tracking.MultiBoxTracker;
 public class DetectorActivity extends CameraActivity implements OnImageAvailableListener {
     private static final Logger LOGGER = new Logger();
 
-    private static final int TF_OD_API_INPUT_SIZE = 416;
-    private static final boolean TF_OD_API_IS_QUANTIZED = false;
-    private static final String TF_OD_API_MODEL_FILE = "yolov4-416-fp32.tflite";
+    private static final int TF_OD_API_INPUT_SIZE = 192;
+    private static final int TF_OD_API_OCR_INPUT_SIZE = 256;
+    private static final boolean TF_OD_API_IS_QUANTIZED = true;
+    private static final String TF_OD_API_MODEL_FILE = "yolov4-tiny_192_74maP_quantized.tflite";
 
     private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/coco.txt";
+    private static final String TF_OD_API_OCR_MODEL_FILE = "yolov4-tiny_ocr_256_100maP_quantized.tflite";
+
+    private static final String TF_OD_API_OCR_LABELS_FILE = "file:///android_asset/ocr.txt";
 
     private static final DetectorMode MODE = DetectorMode.TF_OD_API;
-    private static final float MINIMUM_CONFIDENCE_TF_OD_API = 0.5f;
-    private static final boolean MAINTAIN_ASPECT = false;
+    private static final float MINIMUM_CONFIDENCE_TF_OD_API = 0.3f;
+    private static final boolean MAINTAIN_ASPECT = true;
     private static final Size DESIRED_PREVIEW_SIZE = new Size(640, 480);
     private static final boolean SAVE_PREVIEW_BITMAP = false;
     private static final float TEXT_SIZE_DIP = 10;
@@ -68,6 +72,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     private Integer sensorOrientation;
 
     private Classifier detector;
+    private Classifier ocrDetector;
 
     private long lastProcessingTimeMs;
     private Bitmap rgbFrameBitmap = null;
@@ -103,14 +108,16 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                             getAssets(),
                             TF_OD_API_MODEL_FILE,
                             TF_OD_API_LABELS_FILE,
-                            TF_OD_API_IS_QUANTIZED);
-//            detector = TFLiteObjectDetectionAPIModel.create(
-//                    getAssets(),
-//                    TF_OD_API_MODEL_FILE,
-//                    TF_OD_API_LABELS_FILE,
-//                    TF_OD_API_INPUT_SIZE,
-//                    TF_OD_API_IS_QUANTIZED);
+                            TF_OD_API_IS_QUANTIZED,
+                            192, 540);
             cropSize = TF_OD_API_INPUT_SIZE;
+            ocrDetector =
+                    YoloV4Classifier.create(
+                            getAssets(),
+                            TF_OD_API_OCR_MODEL_FILE,
+                            TF_OD_API_OCR_LABELS_FILE,
+                            TF_OD_API_IS_QUANTIZED,
+                            256, 960);
         } catch (final IOException e) {
             e.printStackTrace();
             LOGGER.e(e, "Exception initializing classifier!");
@@ -167,7 +174,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
             return;
         }
         computingDetection = true;
-        LOGGER.i("Preparing image " + currTimestamp + " for detection in bg thread.");
+//        LOGGER.i("Preparing image " + currTimestamp + " for detection in bg thread.");
 
         rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
@@ -184,7 +191,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                 new Runnable() {
                     @Override
                     public void run() {
-                        LOGGER.i("Running detection on image " + currTimestamp);
+//                        LOGGER.i("Running detection on image " + currTimestamp);
                         final long startTime = SystemClock.uptimeMillis();
                         final List<Classifier.Recognition> results = detector.recognizeImage(croppedBitmap);
                         lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
@@ -210,13 +217,39 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
                         for (final Classifier.Recognition result : results) {
                             final RectF location = result.getLocation();
-                            if (location != null && result.getConfidence() >= minimumConfidence) {
+                            if (location != null && result.getConfidence() >= 0.65) {
                                 canvas.drawRect(location, paint);
-
                                 cropToFrameTransform.mapRect(location);
-
                                 result.setLocation(location);
-                                mappedRecognitions.add(result);
+//                                mappedRecognitions.add(result);
+                                double lpWidth = location.width() * 1.35;
+                                Matrix matrix = ImageUtils.getTransformationMatrix(
+                                        (int) lpWidth, (int) location.height(),
+                                        256, Math.min(256, (int) (256 * location.height() / lpWidth)),
+                                        sensorOrientation, false);
+                                Bitmap lpBitmap = Bitmap.createBitmap(rgbFrameBitmap,
+                                        (int) location.left, (int) location.top,
+                                        (int) lpWidth, (int) location.height(),
+                                        matrix, false);
+
+                                final List<Classifier.Recognition> ocrResults = ocrDetector.recognizeImage(lpBitmap);
+                                for (final Classifier.Recognition ocrResult : ocrResults) {
+                                    final RectF ocrLocation = ocrResult.getLocation();
+                                    if (ocrLocation != null && ocrResult.getConfidence() >= 0.6) {
+                                        canvas.drawRect(ocrLocation, paint);
+                                        Matrix invert = new Matrix();
+                                        matrix.invert(invert);
+                                        invert.mapRect(ocrLocation);
+                                        ocrLocation.left += location.left;
+                                        ocrLocation.right += location.left;
+                                        ocrLocation.top += location.top;
+                                        ocrLocation.bottom += location.top;
+                                        ocrResult.setLocation(ocrLocation);
+                                        mappedRecognitions.add(ocrResult);
+                                    }
+                                }
+
+
                             }
                         }
 
@@ -257,10 +290,12 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     @Override
     protected void setUseNNAPI(final boolean isChecked) {
         runInBackground(() -> detector.setUseNNAPI(isChecked));
+        runInBackground(() -> ocrDetector.setUseNNAPI(isChecked));
     }
 
     @Override
     protected void setNumThreads(final int numThreads) {
         runInBackground(() -> detector.setNumThreads(numThreads));
+        runInBackground(() -> ocrDetector.setNumThreads(numThreads));
     }
 }
