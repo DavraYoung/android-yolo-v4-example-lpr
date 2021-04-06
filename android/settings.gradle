@@ -1,1 +1,2 @@
+include ':openCV'
 include ':app' ,':tensorflow-lite'

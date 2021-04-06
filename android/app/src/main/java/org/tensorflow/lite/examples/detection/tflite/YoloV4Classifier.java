@@ -32,7 +32,6 @@ import java.util.PriorityQueue;
 import java.util.Vector;
 
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.examples.detection.MainActivity;
 import org.tensorflow.lite.examples.detection.env.Logger;
 import org.tensorflow.lite.examples.detection.env.Utils;
 
@@ -143,7 +142,8 @@ public class YoloV4Classifier implements Classifier {
 
     @Override
     public float getObjThresh() {
-        return MainActivity.MINIMUM_CONFIDENCE_TF_OD_API;
+//        return MainActivity.MINIMUM_CONFIDENCE_TF_OD_API;
+        return 0.65f;
     }
 
     private static final Logger LOGGER = new Logger();
