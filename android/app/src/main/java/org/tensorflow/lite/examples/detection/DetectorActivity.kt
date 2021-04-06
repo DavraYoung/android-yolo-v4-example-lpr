@@ -89,6 +89,10 @@ class DetectorActivity : CameraActivity(), OnImageAvailableListener {
         LOGGER.i("Tesseract lang file: " + expectedFile.exists())
     }
 
+    public override fun onClick(v: View?) {
+        //TODO("Not yet implemented")
+    }
+
     public override fun onPreviewSizeChosen(size: Size, rotation: Int) {
         val textSizePx = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, resources.displayMetrics)
@@ -240,15 +244,15 @@ class DetectorActivity : CameraActivity(), OnImageAvailableListener {
             computingDetection = false
             runOnUiThread {
                 showLPInfo(lastLP)
-                showFrameInfo(previewWidth.toString() + "x" + previewHeight)
-                showCropInfo(cropCopyBitmap?.getWidth().toString() + "x" + cropCopyBitmap?.getHeight())
-                showInference(lastProcessingTimeMs.toString() + "ms")
+//                showFrameInfo(previewWidth.toString() + "x" + previewHeight)
+//                showCropInfo(cropCopyBitmap?.getWidth().toString() + "x" + cropCopyBitmap?.getHeight())
+//                showInference(lastProcessingTimeMs.toString() + "ms")
             }
         }
     }
 
     override fun getLayoutId(): Int {
-        return R.layout.tfe_od_camera_connection_fragment_tracking
+        return R.layout.camera_connection_fragment_tracking
     }
 
     override fun getDesiredPreviewFrameSize(): Size {

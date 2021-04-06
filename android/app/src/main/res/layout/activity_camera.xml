@@ -20,8 +20,7 @@
     android:layout_height="match_parent"
     android:background="#00000000">
 
-    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black"
@@ -40,17 +39,19 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:layout_alignParentTop="true"
-            android:background="@color/tfe_semi_transparent">
+            android:background="@color/semi_transparent">
 
-            <ImageView
+            <TextView
+                android:id="@+id/title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:src="@drawable/tfl2_logo" />
+                android:text="License Plate Recognition DEMO"
+                android:textSize="24sp" />
         </androidx.appcompat.widget.Toolbar>
 
     </RelativeLayout>
 
     <include
         android:id="@+id/bottom_sheet_layout"
-        layout="@layout/tfe_od_layout_bottom_sheet" />
+        layout="@layout/layout_bottom_sheet" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
