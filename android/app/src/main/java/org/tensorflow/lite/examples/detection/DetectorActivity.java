@@ -53,12 +53,12 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
     private static final Logger LOGGER = new Logger();
 
     private static final int TF_OD_API_INPUT_SIZE = 192;
-    private static final int TF_OD_API_OCR_INPUT_SIZE = 256;
+    private static final int TF_OD_API_OCR_INPUT_SIZE = 320;
     private static final boolean TF_OD_API_IS_QUANTIZED = true;
     private static final String TF_OD_API_MODEL_FILE = "yolov4-tiny_192_74maP_quantized.tflite";
 
     private static final String TF_OD_API_LABELS_FILE = "file:///android_asset/coco.txt";
-    private static final String TF_OD_API_OCR_MODEL_FILE = "yolov4-tiny_ocr_256_100maP_quantized.tflite";
+    private static final String TF_OD_API_OCR_MODEL_FILE = "yolov4-tiny_ocr_320_98maP_quantized.tflite";
 
     private static final String TF_OD_API_OCR_LABELS_FILE = "file:///android_asset/ocr.txt";
 
@@ -117,7 +117,7 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                             TF_OD_API_OCR_MODEL_FILE,
                             TF_OD_API_OCR_LABELS_FILE,
                             TF_OD_API_IS_QUANTIZED,
-                            256, 960);
+                            320, 1500);
         } catch (final IOException e) {
             e.printStackTrace();
             LOGGER.e(e, "Exception initializing classifier!");
@@ -161,7 +161,33 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
         tracker.setFrameConfiguration(previewWidth, previewHeight, sensorOrientation);
     }
+    static void blurfast(Bitmap bmp, int radius) {
+        int w = bmp.getWidth();
+        int h = bmp.getHeight();
+        int[] pix = new int[w * h];
+        bmp.getPixels(pix, 0, w, 0, 0, w, h);
 
+        for(int r = radius; r >= 1; r /= 2) {
+            for(int i = r; i < h - r; i++) {
+                for(int j = r; j < w - r; j++) {
+                    int tl = pix[(i - r) * w + j - r];
+                    int tr = pix[(i - r) * w + j + r];
+                    int tc = pix[(i - r) * w + j];
+                    int bl = pix[(i + r) * w + j - r];
+                    int br = pix[(i + r) * w + j + r];
+                    int bc = pix[(i + r) * w + j];
+                    int cl = pix[i * w + j - r];
+                    int cr = pix[i * w + j + r];
+
+                    pix[(i * w) + j] = 0xFF000000 |
+                            (((tl & 0xFF) + (tr & 0xFF) + (tc & 0xFF) + (bl & 0xFF) + (br & 0xFF) + (bc & 0xFF) + (cl & 0xFF) + (cr & 0xFF)) >> 3) & 0xFF |
+                            (((tl & 0xFF00) + (tr & 0xFF00) + (tc & 0xFF00) + (bl & 0xFF00) + (br & 0xFF00) + (bc & 0xFF00) + (cl & 0xFF00) + (cr & 0xFF00)) >> 3) & 0xFF00 |
+                            (((tl & 0xFF0000) + (tr & 0xFF0000) + (tc & 0xFF0000) + (bl & 0xFF0000) + (br & 0xFF0000) + (bc & 0xFF0000) + (cl & 0xFF0000) + (cr & 0xFF0000)) >> 3) & 0xFF0000;
+                }
+            }
+        }
+        bmp.setPixels(pix, 0, w, 0, 0, w, h);
+    }
     @Override
     protected void processImage() {
         ++timestamp;
@@ -217,21 +243,21 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
 
                         for (final Classifier.Recognition result : results) {
                             final RectF location = result.getLocation();
-                            if (location != null && result.getConfidence() >= 0.65) {
+                            if (location != null && result.getConfidence() >= 0.5) {
                                 canvas.drawRect(location, paint);
                                 cropToFrameTransform.mapRect(location);
                                 result.setLocation(location);
 //                                mappedRecognitions.add(result);
-                                double lpWidth = location.width() * 1.35;
+                                double lpWidth = location.width();
                                 Matrix matrix = ImageUtils.getTransformationMatrix(
                                         (int) lpWidth, (int) location.height(),
-                                        256, Math.min(256, (int) (256 * location.height() / lpWidth)),
+                                        320, Math.min(320, (int) (320 * lpWidth / location.height())),
                                         sensorOrientation, false);
                                 Bitmap lpBitmap = Bitmap.createBitmap(rgbFrameBitmap,
                                         (int) location.left, (int) location.top,
                                         (int) lpWidth, (int) location.height(),
                                         matrix, false);
-
+                                blurfast(lpBitmap, 3);
                                 final List<Classifier.Recognition> ocrResults = ocrDetector.recognizeImage(lpBitmap);
                                 for (final Classifier.Recognition ocrResult : ocrResults) {
                                     final RectF ocrLocation = ocrResult.getLocation();
