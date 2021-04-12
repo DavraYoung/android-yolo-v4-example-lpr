@@ -13,3 +13,6 @@
 /.idea/
 /openCV/
 /android/app/src/main/jniLibs
+/app/release
+*.zip
+

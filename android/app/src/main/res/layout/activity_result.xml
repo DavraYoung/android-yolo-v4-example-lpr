@@ -8,22 +8,10 @@
 
 
     <Button
-        android:id="@+id/cameraButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Camera"
-        app:layout_constraintBottom_toBottomOf="@+id/detectButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.655"
-        app:layout_constraintStart_toEndOf="@+id/detectButton"
-        app:layout_constraintTop_toTopOf="@+id/detectButton"
-        app:layout_constraintVertical_bias="0.0" />
-
-    <Button
         android:id="@+id/detectButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="80dp"
+        android:layout_marginStart="160dp"
         android:layout_marginBottom="126dp"
         android:text="Detect"
         app:layout_constraintBottom_toBottomOf="parent"
